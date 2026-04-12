@@ -1,16 +1,16 @@
 import { message } from "antd";
 import axios from "axios";
 
-// export const env = 'dev';
-export const env = 'prod';
-// export const env = 'prod';
+// 'local' = same-origin API (Flask on any port, or CRA dev server + package.json proxy)
+// 'staging' | 'dev' | 'prod' = fixed hosts (see below)
+export const env = 'local';
 export const localhost3000 = 'http://localhost:3000';
-export const localhost5000 = 'http://127.0.0.1:5000';
+export const localhostBackend = 'http://127.0.0.1:8765';
 export const publicDomain = 'https://billyyi.top';
 export const backendPath = '/api/chorderator_back_end';
 export const frontendPath = '/accomontage2-online'
 export const prodServer = publicDomain + backendPath;
-export const stagingServer = localhost5000 + backendPath;
+export const stagingServer = localhostBackend + backendPath;
 export const devServer = localhost3000 + backendPath;
 export var myServer;
 export var myDomain;
@@ -22,13 +22,18 @@ if (env === 'prod'){
 }
 else if(env === 'staging'){
     myServer = stagingServer;
-    myDomain = localhost5000;
-    myRoot = localhost5000;
+    myDomain = localhostBackend;
+    myRoot = stagingServer;
 }
 else if (env === 'dev'){
     myServer = devServer;
     myDomain = localhost3000;
-    myRoot = localhost3000;
+    myRoot = devServer;
+}
+else if (env === 'local'){
+    myServer = backendPath;
+    myDomain = '';
+    myRoot = backendPath;
 }
 
 export function server(add, obj, v, method='get', postData=null, callback=null) {

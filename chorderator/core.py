@@ -314,7 +314,9 @@ class Core:
                     memo = ''
             else:
                 memo += i
-        return phrase[:-1]
+        if memo != '':
+            phrase.append(phrase[-1] + int(memo))
+        return phrase
 
     @staticmethod
     def __phrase_to_segmentation(p):

@@ -94,6 +94,15 @@ class DP:
             melo_meta = copy.copy(self.melo_meta)
             melo_meta['pos'] = self.melo_meta['pos'][i]
             templates.append(self.pick_templates(melo, melo_meta))
+            if not templates[-1]:
+                grid = len(melo)
+                bar_units = grid // 2
+                raise ValueError(
+                    'No chord progression template matches phrase {} (melody grid length {}, '
+                    '{} half-bar units vs template length). The DP library only covers certain '
+                    'phrase lengths — use even 4- or 8-bar phrases in the segmentation UI.'
+                    .format(i, grid, bar_units)
+                )
 
             current_layer_score_report = []
 
@@ -187,7 +196,8 @@ class DP:
                 available_templates.append(template)
 
         if len(available_templates) == 0:
-            print('no matched length')
+            Logging.debug('no matched length for melo len=%s (need template length == %s)',
+                            len(melo), len(melo) // 2)
 
         return available_templates
 

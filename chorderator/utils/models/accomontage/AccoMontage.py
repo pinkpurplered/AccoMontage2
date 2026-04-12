@@ -111,7 +111,7 @@ class AccoMontage:
             phrase_len = phrase[1]
             song_ref = acc_pool[phrase_len][-1]
             idx_song = song_ref[path[idx_phrase][0]][0]
-            song_name = df.iloc[idx_song][1]
+            song_name = df.iloc[idx_song, 1]
             reference_set.append((idx_song, song_name))
         print('Reference chosen:', reference_set)
         print('Pitch Transposition (Fit by Model):', shift)

@@ -1,7 +1,7 @@
 import React, { Component } from 'react'
 import './index.css'
 import { LoadingOutlined, CheckCircleOutlined, CaretRightFilled, CaretLeftFilled, PlayCircleOutlined } from '@ant-design/icons';
-import { Empty, Spin, Button, Typography, Divider, Card, Form, Slider, Checkbox } from 'antd';
+import { Empty, Spin, Button, Typography, Divider, Card, Form, Slider, Checkbox, Alert } from 'antd';
 import Icon from '../Icon';
 import { myServer, server, myDomain, myRoot } from '../../utils';
 import ChordProgression from '../ChordProgression';
@@ -41,7 +41,8 @@ export default class Generator extends Component {
         generatedAccName: null,
         playing: 'stop',
         textureStyleControl: this.props.values['enable_texture_style'],
-        styles: []
+        styles: [],
+        generateError: null,
     }
 
     count = 0;
@@ -94,9 +95,17 @@ export default class Generator extends Component {
     }
 
     askStageCallback = (res) => {
-        if (res.status === 'ok') {
-            this.setState({ generatingStage: parseInt(res.stage) })
+        if (res.status !== 'ok') {
+            return;
         }
+        if (res.generate_error) {
+            if (this.askStageInterval) {
+                window.clearInterval(this.askStageInterval);
+            }
+            this.setState({ generatingStage: 0, generateError: res.generate_error });
+            return;
+        }
+        this.setState({ generatingStage: parseInt(res.stage), generateError: null });
     }
 
     generateQueryCallback = (res) => {
@@ -126,7 +135,8 @@ export default class Generator extends Component {
         this.setState({
             generated: [],
             generatingStage: 0,
-            playing: 'stop'
+            playing: 'stop',
+            generateError: null,
         })
         toTop();
     }
@@ -165,7 +175,13 @@ export default class Generator extends Component {
                         </div>
                     </div>
                     <div style={{ width: '50%', float: 'right', height: '100%' }}>
-                        {this.state.generated.length === 0 ?
+                        {this.state.generateError ?
+                            <div style={{ paddingLeft: '50px', paddingRight: '50px', textAlign: 'left' }}>
+                                <Title level={1} style={{ fontSize: '22px', color: '#c00' }}>Generation failed</Title>
+                                <Divider />
+                                <Alert type="error" message={this.state.generateError} showIcon />
+                            </div>
+                            : this.state.generated.length === 0 ?
                             <div style={{ paddingLeft: '50px', paddingRight: '50px', textAlign: 'center' }}>
                                 <Title level={1} style={{ float: 'right', fontSize: '25px', color: '#AAAAAA', userSelect: 'none' }}>Generating, please wait...</Title>
                                 <Divider></Divider>

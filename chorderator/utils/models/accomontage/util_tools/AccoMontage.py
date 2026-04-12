@@ -76,7 +76,7 @@ def dp_search(query_phrases, seg_query, acc_pool, edge_weights, texture_filter=N
         print('Searching for Phrase', i + 1)
         mel, acc, chord, song_ref = acc_pool[query_length[i]]
 
-        weight_key = 'l' + str(query_length[i - 1]) + str(query_length[i])
+        weight_key = f"l_{query_length[i - 1]:02d}_{query_length[i]:02d}"
         contras_result = edge_weights[weight_key]
         # contras_result = (contras_result - 0.9) * 10   #rescale contrastive result if necessary
         # print(np.sort(contras_result[np.random.randint(2000)][-20:]))

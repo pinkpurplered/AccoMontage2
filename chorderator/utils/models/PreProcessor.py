@@ -90,13 +90,10 @@ class PreProcessor:
 
         if self.phrase[0] != 1:
             melo_sequence = melo_sequence[16 * (self.phrase[0] - 1):]
-        for i in range(len(self.phrase)):
-            if i == 0:
-                continue
-            splited_melo.append(melo_sequence[16 * (self.phrase[i - 1] - 1):16 * (self.phrase[i] - 1)])
-            if i == len(self.phrase) - 1:
-                splited_melo.append(melo_sequence[16 * (self.phrase[i] - 1):])
-                break
+        for i in range(1, len(self.phrase)):
+            start = 16 * (self.phrase[i - 1] - 1)
+            end = 16 * (self.phrase[i] - 1)
+            splited_melo.append(melo_sequence[start:end])
         if len(splited_melo) == 0:
             splited_melo = [melo_sequence]
         return splited_melo

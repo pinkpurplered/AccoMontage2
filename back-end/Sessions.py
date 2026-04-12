@@ -24,6 +24,7 @@ class Session:
         self.__segmentation = None
         self.__chord_style = None
         self.__texture_style = None
+        self.generate_error = None
 
     @staticmethod
     def get_log(log_dict):

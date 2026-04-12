@@ -92,7 +92,7 @@ Please check all the requirements in ``back-end/requirments.txt`` are satisfied,
 python back-end/app.py
 ```
 
-You can interact with the GUI at http://127.0.0.1:5000.
+You can interact with the GUI at http://127.0.0.1:8765 (default; avoids macOS AirPlay on port 5000). Override with `PORT=...` when starting `back-end/app.py`.
 
 ### Reference and Acknowledgement
 

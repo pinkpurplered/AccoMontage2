@@ -2,6 +2,8 @@ import io
 import json
 import os
 import shutil
+import signal
+import subprocess
 import sys
 import threading
 import logging
@@ -10,7 +12,9 @@ import time
 import pretty_midi
 from flask import Flask, request, send_from_directory, send_file, make_response, jsonify
 
-sys.path.append('..')
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 import chorderator as cdt
 from Sessions import Sessions
 from construct_midi_seg import construct_midi_seg, MIDI_FOLDER
@@ -21,6 +25,12 @@ saved_data = cdt.load_data()
 APP_ROUTE = '/api/chorderator_back_end'
 sessions = Sessions()
 logging.basicConfig(level=logging.DEBUG)
+
+
+def session_from_request(req):
+    """(session, session_id) or (None, None) if cookie missing or unknown (never unpack bare get_session)."""
+    p = sessions.get_session(req)
+    return (None, None) if p is None else p
 
 
 def resp(msg=None, session_id=None, more=()):
@@ -37,11 +47,26 @@ def send_file_from_session(file, name=None):
     return send_file(
         io.BytesIO(file),
         as_attachment=True,
-        attachment_filename=name)
+        download_name=name,
+    )
 
 
 def begin_generate_thread(core, session_id):
-    core.generate_save(session_id, log=True)
+    try:
+        core.generate_save(session_id, log=True)
+    except Exception as e:
+        logging.exception("generate_save failed session=%s", session_id)
+        if session_id in sessions.sessions:
+            sessions.sessions[session_id].generate_error = (
+                f"{type(e).__name__}: {e}. "
+                "Often caused by a phrase slice length the chord library does not cover "
+                "(e.g. 12 bars in the last segment). Use even 8-bar phrases such as A8B8A8B8, "
+                "or trim the MIDI grid."
+            )[:900]
+        try:
+            core.state = 7
+        except Exception:
+            pass
 
 
 @app.route(APP_ROUTE + '/upload_melody', methods=['POST'])
@@ -58,12 +83,13 @@ def upload_melody():
 
 @app.route(APP_ROUTE + '/generate', methods=['POST'])
 def generate():
-    session, session_id = sessions.get_session(request)
-    if not session:
+    session, session_id = session_from_request(request)
+    if session is None:
         return resp(msg='session expired')
     logging.debug('request is in session {}'.format(session_id))
     params = json.loads(request.data)
     session.load_params(params)
+    session.generate_error = None
 
     session.core = cdt.get_chorderator()
     session.core.set_cache(**saved_data)
@@ -81,17 +107,25 @@ def generate():
 
 @app.route(APP_ROUTE + '/stage_query', methods=['GET'])
 def answer_stage():
-    session, session_id = sessions.get_session(request)
-    if not session:
+    session, session_id = session_from_request(request)
+    if session is None:
         return resp(msg='session expired')
     logging.debug('request is in session {}'.format(session_id))
+    if getattr(session, "generate_error", None):
+        return resp(
+            session_id=session_id,
+            more=[
+                ["stage", "0"],
+                ["generate_error", session.generate_error],
+            ],
+        )
     return resp(session_id=session_id, more=[['stage', str(session.core.get_state())]])
 
 
 @app.route(APP_ROUTE + '/generated_query', methods=['GET'])
 def answer_gen():
-    session, session_id = sessions.get_session(request)
-    if not session:
+    session, session_id = session_from_request(request)
+    if session is None:
         return resp(msg='session expired')
     logging.debug('request is in session {}'.format(session_id))
     for file in os.listdir(session_id):
@@ -121,8 +155,8 @@ def answer_gen():
 
 @app.route(APP_ROUTE + '/wav/<ran>', methods=['GET'])
 def wav(ran):
-    session, session_id = sessions.get_session(request)
-    if not session:
+    session, session_id = session_from_request(request)
+    if session is None:
         return resp(msg='session expired')
     logging.debug('request is in session {}'.format(session_id))
     return send_file_from_session(session.generate_wav, 'accomontage2.wav')
@@ -130,8 +164,8 @@ def wav(ran):
 
 @app.route(APP_ROUTE + '/midi/<ran>', methods=['GET'])
 def midi(ran):
-    session, session_id = sessions.get_session(request)
-    if not session:
+    session, session_id = session_from_request(request)
+    if session is None:
         return resp(msg='session expired')
     logging.debug('request is in session {}'.format(session_id))
     return send_file_from_session(session.generate_midi, 'accomontage2.mid')
@@ -139,8 +173,8 @@ def midi(ran):
 
 @app.route(APP_ROUTE + '/midi-seg/<idx>', methods=['GET'])
 def midi_seg(idx):
-    session, session_id = sessions.get_session(request)
-    if not session:
+    session, session_id = session_from_request(request)
+    if session is None:
         return resp(msg='session expired')
     logging.debug('request is in session {}'.format(session_id))
     return send_file_from_session(session.generate_midi_seg[idx], f'accomontage2-{idx}.mid')
@@ -151,5 +185,53 @@ def index(error):
     return make_response(send_from_directory('static', 'index.html'))
 
 
+def _kill_python_listeners_on_port(port):
+    """SIGTERM stale Flask/Python listeners so restart works. Skips non-Python (e.g. AirPlay)."""
+    try:
+        r = subprocess.run(
+            ['lsof', '-i', f':{port}', '-sTCP:LISTEN', '-n', '-P', '-t'],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return
+    for pid_s in r.stdout.strip().split():
+        try:
+            pid = int(pid_s)
+        except ValueError:
+            continue
+        try:
+            comm = subprocess.check_output(
+                ['ps', '-p', str(pid), '-o', 'comm='],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+        except subprocess.CalledProcessError:
+            continue
+        base = os.path.basename((comm or '').split()[0]).lower()
+        if 'python' not in base:
+            continue
+        try:
+            os.kill(pid, signal.SIGTERM)
+            logging.info('stopped prior Python listener pid=%s on port %s', pid, port)
+            time.sleep(0.25)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            logging.warning('could not stop pid=%s on port %s (permission)', pid, port)
+
+
 if __name__ == '__main__':
-    app.run()
+    # Default avoids macOS AirPlay Receiver (listens on :5000; returns HTTP 403 as AirTunes).
+    port = int(os.environ.get('PORT', '8765'))
+    host = os.environ.get('HOST', '127.0.0.1')
+    if sys.platform == 'darwin' and port == 5000:
+        logging.warning(
+            'macOS: port 5000 is often taken by AirPlay (AirTunes) and returns HTTP 403 in the browser. '
+            'Prefer the default port 8765, or use http://127.0.0.1:5000/ only if AirPlay is off, '
+            'or set PORT to another free port.',
+        )
+    if os.environ.get('SKIP_FREE_PORT', '').lower() not in ('1', 'true', 'yes'):
+        _kill_python_listeners_on_port(port)
+    app.run(host=host, port=port)

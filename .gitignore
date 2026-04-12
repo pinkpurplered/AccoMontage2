@@ -9,6 +9,10 @@ __pycache__/
 *.mscz
 *.pyc
 /front-end/node_modules/
+
+# Back-end runtime (generate_save session dirs next to app.py)
+back-end/*-*-*-*-*/
+back-end/static/midi/
 complex_chord_test.py
 a.txt
 lookup.xlsx
