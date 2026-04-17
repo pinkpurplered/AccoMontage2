@@ -372,26 +372,42 @@ def youtube_url_to_midi_bytes(url: str, work_dir: str, use_vocal_only: bool = Tr
                 break
         
         shift_amount = 0.0
-        if hints.get("beat_times_sec"):
-            beats = sorted(hints["beat_times_sec"])
-            valid_beats = [b for b in beats if b <= first_start + 0.1]
-            if valid_beats:
-                shift_amount = valid_beats[-1]
-            else:
-                shift_amount = first_start
-        else:
-            shift_amount = first_start
+        if hints.get("beat_times_sec") and len(hints["beat_times_sec"]) > 1:
+            from scipy.interpolate import interp1d
             
-        if shift_amount > 0.5:
-            logging.info("youtube_melody: shifting melody by -%.2fs to remove initial silence and align beats", shift_amount)
+            beats = sorted(hints["beat_times_sec"])
+            beat_duration = 60.0 / midi_tempo
+            
+            valid_beats = [i for i, b in enumerate(beats) if b <= first_start + 0.1]
+            start_beat_idx = valid_beats[-1] if valid_beats else 0
+            
+            target_times = [(i - start_beat_idx) * beat_duration for i in range(len(beats))]
+            
+            f = interp1d(beats, target_times, fill_value="extrapolate")
+            
+            logging.info("youtube_melody: warping melody time to align with constant tempo %.2f", midi_tempo)
             new_notes = []
             for n in notes:
-                n.start -= shift_amount
-                n.end -= shift_amount
+                n.start = float(f(n.start))
+                n.end = float(f(n.end))
                 if n.end > 0:
                     n.start = max(0.0, n.start)
                     new_notes.append(n)
             midi.instruments[0].notes = new_notes
+            
+            hints["beat_times_sec"] = [t for t in target_times if t >= -0.1]
+        else:
+            shift_amount = first_start
+            if shift_amount > 0.5:
+                logging.info("youtube_melody: shifting melody by -%.2fs to remove initial silence", shift_amount)
+                new_notes = []
+                for n in notes:
+                    n.start -= shift_amount
+                    n.end -= shift_amount
+                    if n.end > 0:
+                        n.start = max(0.0, n.start)
+                        new_notes.append(n)
+                midi.instruments[0].notes = new_notes
             
             if hints.get("beat_times_sec"):
                 hints["beat_times_sec"] = [
