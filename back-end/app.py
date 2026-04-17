@@ -17,7 +17,6 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 import chorderator as cdt
 from Sessions import Sessions
-from construct_midi_seg import construct_midi_seg, MIDI_FOLDER
 import melody_analyze
 import youtube_melody
 
@@ -27,6 +26,8 @@ saved_data = cdt.load_data()
 APP_ROUTE = '/api/chorderator_back_end'
 sessions = Sessions()
 logging.basicConfig(level=logging.DEBUG)
+MIDI_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'midi')
+os.makedirs(MIDI_FOLDER, exist_ok=True)
 
 
 def session_from_request(req):
@@ -69,19 +70,6 @@ def begin_generate_thread(core, session_id):
             core.state = 7
         except Exception:
             pass
-
-
-@app.route(APP_ROUTE + '/upload_melody', methods=['POST'])
-def upload_melody():
-    if sessions.get_session(request) is None:
-        session, session_id = sessions.create_session()
-        logging.debug('create new session {}'.format(session_id))
-    else:
-        session, session_id = sessions.get_session(request)
-        logging.debug('request is in session {}'.format(session_id))
-    session.melody = request.files['midi'].read()
-    analysis = melody_analyze.analyze_melody_bytes(session.melody, key_hints=None)
-    return resp(session_id=session_id, more=melody_analyze.build_response_more({}, analysis))
 
 
 @app.route(APP_ROUTE + '/upload_youtube', methods=['POST'])
@@ -173,44 +161,23 @@ def answer_gen():
     if session is None:
         return resp(msg='session expired')
     logging.debug('request is in session {}'.format(session_id))
-    for file in os.listdir(session_id):
-        if file == 'chord_gen_log.json':
-            session.generate_log = json.load(open(session_id + '/chord_gen_log.json', 'r'))
-        elif file == 'textured_chord_gen.mid':
-            with open(session_id + '/textured_chord_gen.mid', 'rb') as f:
-                session.generate_midi = f.read()
-        elif file == 'textured_chord_gen.wav':
-            with open(session_id + '/textured_chord_gen.wav', 'rb') as f:
-                session.generate_wav = f.read()
-    session.generate_midi_seg = construct_midi_seg(session, session_id)
+    
     chord_midi_name = session_id + '_' + str(time.time()) + '_chord_gen.mid'
     acc_midi_name = session_id + '_' + str(time.time()) + '_textured_chord_gen.mid'
-    pretty_midi.PrettyMIDI(session_id + '/chord_gen.mid').write(MIDI_FOLDER + '/' + chord_midi_name)
-    # shutil.copy(session_id + '/chord_gen.mid', MIDI_FOLDER + chord_midi_name)
-    pretty_midi.PrettyMIDI(session_id + '/textured_chord_gen.mid').write(MIDI_FOLDER + '/' + acc_midi_name)
-    # shutil.copy(session_id + '/textured_chord_gen.mid', MIDI_FOLDER + acc_midi_name)
-    shutil.rmtree(session_id)
-    new_log = []
-    for i in range(len(session.generate_log)):
-        new_log.append(session.generate_log[i])
-        new_log[i]['midi_name'] = session.generate_midi_seg[i]
+    
+    if os.path.exists(session_id + '/chord_gen.mid'):
+        pretty_midi.PrettyMIDI(session_id + '/chord_gen.mid').write(os.path.join(MIDI_FOLDER, chord_midi_name))
+    if os.path.exists(session_id + '/textured_chord_gen.mid'):
+        pretty_midi.PrettyMIDI(session_id + '/textured_chord_gen.mid').write(os.path.join(MIDI_FOLDER, acc_midi_name))
+        
+    shutil.rmtree(session_id, ignore_errors=True)
+    
     return resp(session_id=session_id,
-                more=[['log', new_log], ['chord_midi_name', chord_midi_name], ['acc_midi_name', acc_midi_name]])
-
-
-@app.route(APP_ROUTE + '/wav/<ran>', methods=['GET'])
-def wav(ran):
-    session, session_id = session_from_request(request)
-    if session is None:
-        return resp(msg='session expired')
-    logging.debug('request is in session {}'.format(session_id))
-    return send_file_from_session(session.generate_wav, 'accomontage2.wav')
+                more=[['chord_midi_name', chord_midi_name], ['acc_midi_name', acc_midi_name]])
 
 
 @app.route(APP_ROUTE + '/midi/<ran>', methods=['GET'])
 def midi(ran):
-    # Serve the exact rendered MIDI requested by filename from static/midi.
-    # This avoids returning a single cached in-memory MIDI for every download link.
     safe_name = os.path.basename(ran)
     if not safe_name.endswith('.mid'):
         return resp(msg='invalid midi name')
@@ -218,15 +185,6 @@ def midi(ran):
     if not os.path.isfile(midi_path):
         return resp(msg='midi not found')
     return send_from_directory(MIDI_FOLDER, safe_name, as_attachment=True, download_name=safe_name)
-
-
-@app.route(APP_ROUTE + '/midi-seg/<idx>', methods=['GET'])
-def midi_seg(idx):
-    session, session_id = session_from_request(request)
-    if session is None:
-        return resp(msg='session expired')
-    logging.debug('request is in session {}'.format(session_id))
-    return send_file_from_session(session.generate_midi_seg[idx], f'accomontage2-{idx}.mid')
 
 
 @app.errorhandler(404)

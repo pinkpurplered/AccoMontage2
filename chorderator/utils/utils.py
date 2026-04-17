@@ -13,16 +13,6 @@ from ..utils import structured
 from ..utils import string
 from ..settings import static_storage
 
-try:
-    from midi2audio import FluidSynth
-except ImportError as e:
-    FluidSynth = None
-
-fs_exist = True
-if FluidSynth is None:
-    fs_exist = False
-    warnings.warn('Could not import FluidSynth, audio formats writing disabled')
-
 
 def pickle_read(path):
     if path == 'lib':
@@ -251,21 +241,7 @@ def listen_pitches(midi_pitch: list, time, instrument=0):
 
 
 def listen(midi: PrettyMIDI, path=None, out=None):
-    if not fs_exist:
-        return False
-    if not path:
-        path = string.STATIC_DIR + "audio/"
-    midi.write(path + "__listen__.mid")
-    fs = FluidSynth(sound_font=string.STATIC_DIR + 'default_sound_font.sf2')
-    try:
-        os.makedirs(path)
-    except:
-        pass
-    if out is None:
-        out = time.strftime("%H_%M_%S", time.localtime()) + ".wav"
-    fs.midi_to_audio(path + "__listen__.mid", path + out)
-    os.remove(path + "__listen__.mid")
-    return True
+    pass
 
 
 def split_huge_progression_dict(my_dict):

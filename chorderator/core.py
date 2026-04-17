@@ -408,12 +408,6 @@ class Core:
             chord_gen.write(output_name + '/chord_gen.mid')
         if task == 'textured_chord' or task == 'texture' or task == 'chord_and_textured_chord':
             gen.write(output_name + '/textured_chord_gen.mid')
-        self.state = 6
-        if wav:
-            if task == 'chord':
-                listen(chord_gen, path=output_name, out='/chord_gen.wav')
-            if task == 'textured_chord' or task == 'texture' or task == 'chord_and_textured_chord':
-                listen(gen, path=output_name, out='/textured_chord_gen.wav')
         self.state = 7
         if 'base_dir' in kwargs:
             os.chdir(cwd)
