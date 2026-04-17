@@ -1,20 +1,86 @@
-.title{
-    position: relative;
-    text-decoration: none;
-    font-size: 20px;
-    color: #333;
+body {
+  margin: 0;
+  padding: 0;
+  background: #f0f2f5;
 }
-.title:before{
-    content: "";
-    position: absolute;
-    left: 0;
-    bottom: -2px;
-    height: 2px;
-    width: 100%;
-    background: #003b76;
-    transform: scale(0);
-    transition: all 0.3s;
+
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  padding: 20px;
 }
-.title:hover:before{
-    transform: scale(1);
+
+.main-card {
+  background: white;
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+  padding: 50px;
+  max-width: 700px;
+  width: 100%;
+  text-align: center;
+}
+
+.title-gradient {
+  background: linear-gradient(45deg, #1890ff, #722ed1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+.subtitle {
+  color: #6c757d;
+  font-size: 18px;
+  margin-bottom: 40px;
+}
+
+.yt-input {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.yt-input input {
+  padding: 15px 20px;
+  font-size: 16px;
+}
+
+.yt-input .ant-input-search-button {
+  height: auto;
+  padding: 0 30px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.status-container {
+  margin-top: 40px;
+  text-align: left;
+  background: #f8f9fa;
+  padding: 20px 30px;
+  border-radius: 16px;
+}
+
+.result-container {
+  margin-top: 40px;
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+.download-card {
+  flex: 1;
+  border-radius: 16px;
+  border: 2px solid #f0f2f5;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.download-card:hover {
+  border-color: #1890ff;
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(24,144,255,0.1);
 }
