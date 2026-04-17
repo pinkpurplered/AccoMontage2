@@ -11,10 +11,12 @@ def construct_midi_seg(session, session_id):
     def construct(midi_path, sep, channel_name, delete_melo):
         all_seg = []
         midi = pretty_midi.PrettyMIDI(midi_path)
+        tempos = midi.get_tempo_changes()[1]
+        seg_tempo = float(tempos[0]) if len(tempos) else 120.0
         for i in range(1, len(sep)):
             phrase_start = sep[i - 1]
             phrase_end = sep[i]
-            midi_seg = pretty_midi.PrettyMIDI()
+            midi_seg = pretty_midi.PrettyMIDI(initial_tempo=seg_tempo)
             if delete_melo:
                 ins_seg = pretty_midi.Instrument(0)
                 for note in midi.instruments[1].notes:

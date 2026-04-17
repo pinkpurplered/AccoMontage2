@@ -18,6 +18,8 @@ if _REPO_ROOT not in sys.path:
 import chorderator as cdt
 from Sessions import Sessions
 from construct_midi_seg import construct_midi_seg, MIDI_FOLDER
+import melody_analyze
+import youtube_melody
 
 app = Flask(__name__, static_url_path='')
 app.secret_key = 'AccoMontage2-GUI'
@@ -78,7 +80,37 @@ def upload_melody():
         session, session_id = sessions.get_session(request)
         logging.debug('request is in session {}'.format(session_id))
     session.melody = request.files['midi'].read()
-    return resp(session_id=session_id)
+    analysis = melody_analyze.analyze_melody_bytes(session.melody, key_hints=None)
+    return resp(session_id=session_id, more=melody_analyze.build_response_more({}, analysis))
+
+
+@app.route(APP_ROUTE + '/upload_youtube', methods=['POST'])
+def upload_youtube():
+    data = request.get_json(silent=True) or {}
+    url = (data.get('url') or '').strip()
+    use_vocal_only = bool(data.get('use_vocal_only', True))
+    if not url:
+        return resp(msg='missing url')
+    if sessions.get_session(request) is None:
+        session, session_id = sessions.create_session()
+        logging.debug('create new session {}'.format(session_id))
+    else:
+        session, session_id = sessions.get_session(request)
+        logging.debug('request is in session {}'.format(session_id))
+    work_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), session_id)
+    try:
+        midi_bytes, hints = youtube_melody.youtube_url_to_midi_bytes(url, work_dir, use_vocal_only=use_vocal_only)
+        session.melody = midi_bytes
+    except Exception as e:
+        logging.exception('upload_youtube failed')
+        return resp(msg=str(e)[:900])
+    analysis = melody_analyze.analyze_melody_bytes(session.melody, key_hints=hints)
+    if analysis.get("detected_tempo") is not None:
+        session.tempo = analysis.get("detected_tempo")
+    return resp(
+        session_id=session_id,
+        more=melody_analyze.build_response_more(hints, analysis),
+    )
 
 
 @app.route(APP_ROUTE + '/generate', methods=['POST'])
@@ -86,10 +118,23 @@ def generate():
     session, session_id = session_from_request(request)
     if session is None:
         return resp(msg='session expired')
+    if not session.melody:
+        return resp(msg='load melody first (use YouTube Load melody on the previous step)')
     logging.debug('request is in session {}'.format(session_id))
     params = json.loads(request.data)
     session.load_params(params)
+    if not session.tempo:
+        session.tempo = 120
     session.generate_error = None
+
+    logging.info(
+        'generate meta tonic=%s mode=%s meter=%s tempo=%s segmentation=%s',
+        session.tonic,
+        session.mode,
+        session.meter,
+        session.tempo,
+        session.segmentation,
+    )
 
     session.core = cdt.get_chorderator()
     session.core.set_cache(**saved_data)
@@ -99,7 +144,7 @@ def generate():
     session.core.set_melody(f'{session_id}/melody.mid')
     session.core.set_output_style(session.chord_style)
     session.core.set_texture_prefilter(session.texture_style)
-    session.core.set_meta(tonic=session.tonic, meter=session.meter, mode=session.mode)
+    session.core.set_meta(tonic=session.tonic, meter=session.meter, mode=session.mode, tempo=session.tempo)
     session.core.set_segmentation(session.segmentation)
     threading.Thread(target=begin_generate_thread, args=(session.core, session_id)).start()
     return resp(session_id=session_id)
@@ -164,11 +209,15 @@ def wav(ran):
 
 @app.route(APP_ROUTE + '/midi/<ran>', methods=['GET'])
 def midi(ran):
-    session, session_id = session_from_request(request)
-    if session is None:
-        return resp(msg='session expired')
-    logging.debug('request is in session {}'.format(session_id))
-    return send_file_from_session(session.generate_midi, 'accomontage2.mid')
+    # Serve the exact rendered MIDI requested by filename from static/midi.
+    # This avoids returning a single cached in-memory MIDI for every download link.
+    safe_name = os.path.basename(ran)
+    if not safe_name.endswith('.mid'):
+        return resp(msg='invalid midi name')
+    midi_path = os.path.join(MIDI_FOLDER, safe_name)
+    if not os.path.isfile(midi_path):
+        return resp(msg='midi not found')
+    return send_from_directory(MIDI_FOLDER, safe_name, as_attachment=True, download_name=safe_name)
 
 
 @app.route(APP_ROUTE + '/midi-seg/<idx>', methods=['GET'])

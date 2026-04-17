@@ -7,3 +7,7 @@ matplotlib
 six
 pretty_midi
 flask
+yt-dlp
+basic-pitch
+librosa
+demucs

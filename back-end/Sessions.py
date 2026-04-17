@@ -21,6 +21,7 @@ class Session:
         self.__tonic = None
         self.__meter = None
         self.__mode = None
+        self.__tempo = 120
         self.__segmentation = None
         self.__chord_style = None
         self.__texture_style = None
@@ -54,6 +55,8 @@ class Session:
             self.mode = params['mode']
         if 'meter' in params:
             self.meter = params['meter']
+        if 'tempo' in params:
+            self.tempo = params['tempo']
         if 'phrases' in params:
             self.segmentation = params['phrases']
         if 'chord_style' in params:
@@ -157,6 +160,22 @@ class Session:
         self.__mode = new
         self.last_active = time.time()
 
+
+    @property
+    def tempo(self):
+        return self.__tempo
+
+    @tempo.setter
+    def tempo(self, new):
+        try:
+            t = float(new)
+        except (TypeError, ValueError):
+            return
+        if not (30.0 <= t <= 260.0):
+            return
+        self.__tempo = t
+        self.last_active = time.time()
+
     @property
     def segmentation(self):
         return self.__segmentation
@@ -203,6 +222,7 @@ class Session:
             f'tonic = {self.tonic} ' \
             f'meter = {self.meter} ' \
             f'mode = {self.mode} ' \
+            f'tempo = {self.tempo} ' \
             f'segmentation = {self.segmentation} ' \
             f'chord_style = {self.chord_style} ' \
             f'texture_style = {self.texture_style} />'
